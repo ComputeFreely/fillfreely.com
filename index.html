@@ -136,27 +136,14 @@
             <span>Forms, text, signatures</span>
           </a>
         </nav>
-        <div class="guarantee-pills" aria-label="Site guarantees">
-          <span class="status-pill">Free</span>
-          <span class="status-pill">No uploads</span>
-          <span class="status-pill">No watermark</span>
-        </div>
       </div>
     </header>
 
     <main class="app-shell">
       <section class="workspace-pane" aria-labelledby="workspaceTitle">
-        <div class="workspace-header">
-          <div>
-            <p class="eyebrow">Fill Workspace</p>
-            <h1 id="workspaceTitle">Fill and sign PDFs locally</h1>
-          </div>
+        <div class="workspace-header compact-header">
+          <h1 class="sr-only" id="workspaceTitle">PDF filler and signer</h1>
           <div class="engine-badge" id="engineBadge" aria-live="polite">Ready</div>
-        </div>
-
-        <div class="promise-strip">
-          <strong>No account. No upload. No watermark. No download gate.</strong>
-          <a href="https://computefreely.com/">Compute Freely promise</a>
         </div>
 
         <div class="drop-zone" id="dropZone">
@@ -165,7 +152,6 @@
             <span class="drop-icon upload-icon" aria-hidden="true"></span>
             <span>
               <span class="drop-title">Choose or drop a PDF</span>
-              <span class="drop-note">Fill fields, place text, add checkmarks, dates, initials, and visual signatures</span>
             </span>
           </label>
         </div>
@@ -238,9 +224,8 @@
         <div class="viewer-shell">
           <div class="page-rail" id="pageRail" aria-label="PDF pages"></div>
           <div class="preview-wrap">
-            <div class="empty-state" id="emptyState">
-              <h2>Start with a PDF form or regular PDF.</h2>
-              <p>Existing PDF form fields become editable on the page. For scans or flat PDFs, use the tools and click the page to place marks.</p>
+            <div class="empty-state sr-only" id="emptyState">
+              <h2>Choose a PDF to begin.</h2>
             </div>
             <div class="page-stage" id="pageStage" hidden>
               <div class="page-canvas-wrap" id="pageCanvasWrap">
