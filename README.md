@@ -1,6 +1,6 @@
 # Fill Freely
 
-Fill Freely is a free browser PDF form filler and visual PDF signer.
+Fill Freely is a free browser tool for adding text, checkmarks, dates, initials, and signature appearances to PDFs.
 
 Live site: https://fillfreely.com/
 
