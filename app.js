@@ -1489,7 +1489,6 @@
     state.inkTool = tool;
     clearInkPad();
     $("#typedInkText").placeholder = tool === "initials" ? "Type initials" : "Type a signature";
-    $("#inkEyebrow").textContent = tool === "initials" ? "Saved initials" : "Saved signature";
     $("#inkTitle").textContent = tool === "initials" ? "Create initials" : "Create signature";
     $("#inkNote").textContent = tool === "initials"
       ? "Draw your initials or type them to generate a reusable initials mark."
