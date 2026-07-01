@@ -1,0 +1,11 @@
+.git
+.github
+.githooks
+.wrangler
+node_modules
+tools
+.assetsignore
+.gitignore
+README.md
+AGENTS.md
+wrangler.jsonc

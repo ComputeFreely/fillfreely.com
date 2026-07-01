@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+repo_root="$(git rev-parse --show-toplevel)"
+workspace_root="$(dirname "$repo_root")"
+project="$(basename "$repo_root")"
+check_script="$workspace_root/tools/check-design-system.js"
+
+if [ ! -f "$check_script" ]; then
+  echo "Skipping Freely design sync check: workspace tool not found at $check_script" >&2
+  exit 0
+fi
+
+node "$check_script" --project "$project"

@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Free PDF filler and visual signer with no upload step. Fill PDF forms, add text, checkmarks, dates, initials, and signatures locally in your browser.">
+    <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
+    <meta name="theme-color" content="#f5f4ee">
+    <meta name="application-name" content="Fill Freely">
+    <meta property="og:title" content="Free PDF Filler and Signer No Upload | Fill Freely">
+    <meta property="og:description" content="Fill PDF forms, add text, checkmarks, dates, initials, and visual signatures locally in your browser. No uploads or watermarks.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://fillfreely.com/">
+    <meta property="og:site_name" content="Fill Freely">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Free PDF Filler and Signer No Upload | Fill Freely">
+    <meta name="twitter:description" content="Browser-only PDF form filling, text marks, checkmarks, dates, initials, and visual signatures.">
+    <title>Free PDF Filler and Signer No Upload | Fill Freely</title>
+    <link rel="canonical" href="https://fillfreely.com/">
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml">
+    <link rel="alternate" type="text/plain" href="/llms.txt" title="AI-readable site summary">
+    <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="assets/shared/freely-ui.css">
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://computefreely.com/#organization",
+            "name": "Compute Freely",
+            "url": "https://computefreely.com/"
+          },
+          {
+            "@type": "WebApplication",
+            "@id": "https://fillfreely.com/#app",
+            "name": "Fill Freely",
+            "url": "https://fillfreely.com/",
+            "description": "A free browser PDF form filler and visual PDF signer for adding text, checkmarks, dates, initials, and signature images with no upload step.",
+            "applicationCategory": "UtilitiesApplication",
+            "operatingSystem": "Any modern browser",
+            "browserRequirements": "Requires JavaScript in a modern browser.",
+            "isAccessibleForFree": true,
+            "publisher": {
+              "@id": "https://computefreely.com/#organization"
+            },
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD",
+              "url": "https://fillfreely.com/"
+            },
+            "featureList": [
+              "Fill detected PDF form fields",
+              "Add text, checkmarks, dates, and initials",
+              "Draw and place visual signatures",
+              "Move, edit, and delete placed marks",
+              "Preserve editable form fields on export",
+              "Optionally flatten filled form fields",
+              "Local browser processing with no upload step"
+            ]
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://fillfreely.com/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Does Fill Freely upload PDFs?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. Fill Freely renders and edits PDFs in the browser and does not require an upload step."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Can Fill Freely sign PDFs?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Fill Freely can place a drawn visual signature image on a PDF, but it does not create a cryptographic digital signature certificate."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Can Fill Freely fill existing PDF form fields?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. Fill Freely detects common PDF form fields and also supports freeform text, checkmarks, dates, initials, and visual signatures."
+                }
+              }
+            ]
+          },
+          {
+            "@type": "BreadcrumbList",
+            "@id": "https://fillfreely.com/#breadcrumb",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Compute Freely",
+                "item": "https://computefreely.com/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Fill Freely",
+                "item": "https://fillfreely.com/"
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+    <script src="assets/vendor/pdf-lib.min.js" defer></script>
+    <script src="assets/vendor/pdf.min.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Fill Freely home">
+        <img class="brand-mark" src="assets/icons/favicon.svg" alt="" width="40" height="40" aria-hidden="true">
+        <span>
+          <strong>Fill Freely</strong>
+          <small>Local PDF filling and visual signing</small>
+        </span>
+      </a>
+      <div class="topbar-actions pdf-topbar-actions">
+        <nav class="tool-switcher" aria-label="PDF Freely tools">
+          <a class="tool-switcher-link" href="https://pdffreely.com/">
+            <strong>Organize PDF</strong>
+            <span>Merge, split, rotate</span>
+          </a>
+          <a class="tool-switcher-link active" href="/" aria-current="page">
+            <strong>Fill &amp; Sign</strong>
+            <span>Forms, text, signatures</span>
+          </a>
+        </nav>
+        <div class="guarantee-pills" aria-label="Site guarantees">
+          <span class="status-pill">Free</span>
+          <span class="status-pill">No uploads</span>
+          <span class="status-pill">No watermark</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <section class="workspace-pane" aria-labelledby="workspaceTitle">
+        <div class="workspace-header">
+          <div>
+            <p class="eyebrow">Fill Workspace</p>
+            <h1 id="workspaceTitle">Fill and sign PDFs locally</h1>
+          </div>
+          <div class="engine-badge" id="engineBadge" aria-live="polite">Ready</div>
+        </div>
+
+        <div class="promise-strip">
+          <strong>No account. No upload. No watermark. No download gate.</strong>
+          <a href="https://computefreely.com/">Compute Freely promise</a>
+        </div>
+
+        <div class="drop-zone" id="dropZone">
+          <input id="fileInput" class="file-input" type="file" accept="application/pdf,.pdf">
+          <label class="drop-label" for="fileInput">
+            <span class="drop-icon upload-icon" aria-hidden="true"></span>
+            <span>
+              <span class="drop-title">Choose or drop a PDF</span>
+              <span class="drop-note">Fill fields, place text, add checkmarks, dates, initials, and visual signatures</span>
+            </span>
+          </label>
+        </div>
+
+        <div class="workspace-stats">
+          <div><span>File</span><strong id="fileName">None</strong></div>
+          <div><span>Pages</span><strong id="pageCount">0</strong></div>
+          <div><span>Fields</span><strong id="fieldCount">0</strong></div>
+          <div><span>Marks</span><strong id="markCount">0</strong></div>
+        </div>
+
+        <div class="action-row">
+          <button class="button primary" type="button" id="downloadPdf" disabled>
+            <span class="button-icon download-icon" aria-hidden="true"></span>
+            Download filled PDF
+          </button>
+          <button class="button" type="button" id="prevPage" disabled>Previous</button>
+          <button class="button" type="button" id="nextPage" disabled>Next</button>
+          <button class="button" type="button" id="toggleDetails" aria-expanded="false" aria-controls="fillForm">Details</button>
+          <button class="button ghost" type="button" id="resetAll">Reset</button>
+        </div>
+
+        <div class="tool-strip" id="toolStrip" aria-label="Placement tools">
+          <button type="button" class="tool-card" data-tool="text" aria-pressed="false" disabled title="Add one text box">
+            <span class="tool-icon" aria-hidden="true">T</span>
+            <span>Text</span>
+          </button>
+          <button type="button" class="tool-card" data-tool="check" aria-pressed="false" disabled title="Add one checkmark">
+            <span class="tool-icon" aria-hidden="true">✓</span>
+            <span>Check</span>
+          </button>
+          <button type="button" class="tool-card" data-tool="date" aria-pressed="false" disabled title="Add one date">
+            <span class="tool-icon" aria-hidden="true">D</span>
+            <span>Date</span>
+          </button>
+          <button type="button" class="tool-card" data-tool="initials" aria-pressed="false" disabled title="Add saved initials">
+            <span class="tool-icon" aria-hidden="true">I</span>
+            <span>Initials</span>
+          </button>
+          <button type="button" class="tool-card" data-tool="signature" aria-pressed="false" disabled title="Add saved signature">
+            <span class="tool-icon" aria-hidden="true">S</span>
+            <span>Signature</span>
+          </button>
+          <label class="compact-field" for="markDate">
+            <span>Date</span>
+            <input type="date" id="markDate">
+          </label>
+          <label class="compact-field color-field" for="markColor">
+            <span>Color</span>
+            <input type="color" id="markColor" value="#111827">
+          </label>
+          <label class="compact-range" for="markSize">
+            <span>Text/check size <em id="markSizeValue">16 pt</em></span>
+            <input type="range" id="markSize" min="8" max="96" step="1" value="16">
+          </label>
+          <label class="compact-range" for="signatureScale">
+            <span>Image width <em id="signatureScaleValue">34%</em></span>
+            <input type="range" id="signatureScale" min="8" max="95" step="1" value="34">
+          </label>
+        </div>
+
+        <div class="tool-mode" id="toolMode" aria-live="polite">
+          <span class="tool-mode-dot" aria-hidden="true"></span>
+          <span>
+            <strong id="toolModeTitle">No tool selected</strong>
+            <small id="toolModeDetail">Choose a tool above, then click once on the PDF page.</small>
+          </span>
+        </div>
+
+        <div class="viewer-shell">
+          <div class="page-rail" id="pageRail" aria-label="PDF pages"></div>
+          <div class="preview-wrap">
+            <div class="empty-state" id="emptyState">
+              <h2>Start with a PDF form or regular PDF.</h2>
+              <p>Existing PDF form fields become editable on the page. For scans or flat PDFs, use the tools and click the page to place marks.</p>
+            </div>
+            <div class="page-stage" id="pageStage" hidden>
+              <div class="page-canvas-wrap" id="pageCanvasWrap">
+                <canvas id="pageCanvas"></canvas>
+                <div class="overlay-layer" id="overlayLayer"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <form id="fillForm" class="control-pane" hidden>
+        <section class="panel" aria-labelledby="selectedTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Selected Mark</p>
+              <h2 id="selectedTitle">Adjust placement</h2>
+            </div>
+          </div>
+
+          <div id="selectedEmpty" class="subtle-box">Select a mark on the page to edit, move, or delete it.</div>
+          <div id="selectedControls" hidden>
+            <label class="field">
+              <span>Content</span>
+              <input type="text" id="selectedText" maxlength="160">
+            </label>
+            <div class="field-grid">
+              <label class="field">
+                <span>Page</span>
+                <select id="selectedPage"></select>
+              </label>
+              <label class="field color-field">
+                <span>Color</span>
+                <input type="color" id="selectedColor">
+              </label>
+            </div>
+            <label class="range-field" for="selectedSize">
+              <span><strong>Size</strong><em id="selectedSizeValue">16 pt</em></span>
+              <input type="range" id="selectedSize" min="8" max="96" step="1">
+            </label>
+            <div class="signature-actions">
+              <button class="mini-button danger" type="button" id="deleteMark">Delete mark</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="fieldTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Fields</p>
+              <h2 id="fieldTitle">Detected form fields</h2>
+            </div>
+          </div>
+          <div class="field-list" id="fieldList">
+            <div class="subtle-box">Upload a PDF to detect fillable fields.</div>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="exportTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Export</p>
+              <h2 id="exportTitle">Output settings</h2>
+            </div>
+          </div>
+
+          <label class="field">
+            <span>Download name</span>
+            <input type="text" id="outputName" value="fillfreely-filled.pdf" autocomplete="off" spellcheck="false">
+          </label>
+
+          <label class="check-field">
+            <input type="checkbox" id="flattenFields">
+            <span>Flatten form fields into fixed content</span>
+          </label>
+          <p class="field-note">Leave this off to keep original PDF form fields editable in apps like Preview. Freeform marks and visual signatures are added as page content.</p>
+        </section>
+      </form>
+    </main>
+
+    <div class="ink-dialog" id="inkDialog" role="dialog" aria-modal="true" aria-labelledby="inkTitle" hidden>
+      <div class="ink-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow" id="inkEyebrow">Saved mark</p>
+            <h2 id="inkTitle">Create signature</h2>
+          </div>
+        </div>
+        <canvas id="signaturePad" class="signature-pad" width="720" height="220" tabindex="0" aria-label="Draw saved mark"></canvas>
+        <label class="field">
+          <span>Type instead</span>
+          <input type="text" id="typedInkText" maxlength="80" placeholder="Type a signature or initials">
+        </label>
+        <div class="signature-actions">
+          <button class="mini-button" type="button" id="clearSignature">Clear</button>
+          <button class="mini-button ghost" type="button" id="cancelInk">Cancel</button>
+          <button class="mini-button active" type="button" id="useSignature" disabled>Save and place</button>
+        </div>
+        <p class="field-note" id="inkNote">Draw with your pointer or type text to generate a visual mark. This is not a cryptographic digital signature.</p>
+      </div>
+    </div>
+
+    <section class="discovery-section" aria-labelledby="fillDiscoveryTitle">
+      <div class="discovery-content">
+        <p class="eyebrow">PDF filler</p>
+        <h2 id="fillDiscoveryTitle">Fill and sign PDFs without uploading.</h2>
+        <p class="discovery-lede">Fill Freely is a free PDF filler and visual PDF signer for forms that need typed fields, text, checkmarks, dates, initials, or a signature appearance. It works locally in your browser, keeps detected form fields editable by default, and can optionally flatten fields into a fixed PDF download. For merging, splitting, rotating, reordering, page numbers, watermarks, or image-to-PDF conversion, use <a href="https://pdffreely.com/">PDF Freely</a>.</p>
+        <ul class="search-terms" aria-label="Common Fill Freely searches">
+          <li>free PDF filler</li>
+          <li>fill PDF form no upload</li>
+          <li>sign PDF online free</li>
+          <li>add text to PDF</li>
+          <li>add checkmark to PDF</li>
+          <li>flatten PDF form fields</li>
+        </ul>
+        <div class="discovery-grid" aria-label="Fill Freely capabilities">
+          <article>
+            <h3>Form fields and marks</h3>
+            <p>Fill detected text fields, checkboxes, dropdowns, option lists, and radio groups, or place freeform text, dates, initials, and checkmarks.</p>
+          </article>
+          <article>
+            <h3>Visual signatures</h3>
+            <p>Draw a signature once and place it on the page. This is useful for signature appearance, but it is not a cryptographic digital signature certificate.</p>
+          </article>
+          <article>
+            <h3>Local export</h3>
+            <p>Move, edit, and delete placed marks, then download a filled PDF with optional flattening. The original PDF does not need to leave your device.</p>
+          </article>
+        </div>
+        <div class="faq-list" aria-label="Fill Freely answers">
+          <article>
+            <h3>Does Fill Freely upload PDFs?</h3>
+            <p>No. Fill Freely renders and edits PDFs in the browser and does not require an upload step.</p>
+          </article>
+          <article>
+            <h3>Can Fill Freely sign PDFs?</h3>
+            <p>Fill Freely can place a drawn visual signature image on a PDF, but it does not create a cryptographic digital signature certificate.</p>
+          </article>
+          <article>
+            <h3>Can Fill Freely fill existing PDF form fields?</h3>
+            <p>Yes. Fill Freely detects common PDF form fields and also supports freeform text, checkmarks, dates, initials, and visual signatures.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <footer class="site-footer suite-footer">
+      <div class="suite-footer-head">
+        <strong>More free local-first browser tools</strong>
+        <span>Freely tools run in your browser when possible, with no accounts, uploads, watermarks, or download gates.</span>
+      </div>
+      <nav class="suite-footer-nav" aria-label="Freely tools">
+        <a class="suite-link" href="https://computefreely.com/"><strong>Compute Freely</strong><span>Free local browser tools</span></a>
+        <a class="suite-link" href="https://qrfreely.com/"><strong>QR Freely</strong><span>Free QR code generator</span></a>
+        <a class="suite-link" href="https://videofreely.com/"><strong>Video Freely</strong><span>Browser video converter</span></a>
+        <a class="suite-link" href="https://pdffreely.com/"><strong>PDF Freely</strong><span>PDF merge, split, and organize</span></a>
+        <a class="suite-link" href="https://fillfreely.com/"><strong>Fill Freely</strong><span>PDF form filler and signer</span></a>
+        <a class="suite-link" href="https://imagefreely.com/"><strong>Image Freely</strong><span>Image editor and bulk converter</span></a>
+      </nav>
+      <nav class="suite-footer-meta" aria-label="Project links">
+        <a href="https://github.com/ComputeFreely/fillfreely.com">Source on GitHub</a>
+        <a href="https://github.com/ComputeFreely/fillfreely.com/issues/new">Report an issue</a>
+        <a href="mailto:info@computefreely.com">info@computefreely.com</a>
+      </nav>
+    </footer>
+  </body>
+</html>

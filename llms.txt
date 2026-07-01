@@ -1,0 +1,26 @@
+# Fill Freely
+
+Fill Freely is a free local PDF form filler and visual PDF signer. It fills detected PDF form fields and places text, checkmarks, dates, initials, and visual signatures locally in the browser.
+
+## Primary URL
+
+https://fillfreely.com/
+
+## Capabilities
+
+- Detect and edit common PDF form fields.
+- Add freeform text, checkmarks, dates, initials, and visual signature images.
+- Move, edit, resize, recolor, and delete placed marks.
+- Flatten filled fields and marks into the exported PDF.
+- Run locally in the browser with no account, watermark, upload step, or download gate.
+
+## Limitations
+
+- Visual signatures are image marks, not cryptographic digital signature certificates.
+- Some malformed or unusual PDF form fields may not be detected.
+- Large PDFs are limited by browser memory.
+- Redaction is intentionally not included.
+
+## Useful search topics
+
+free PDF filler, fill PDF form no upload, sign PDF online free, add text to PDF, add checkmark to PDF, add signature to PDF, flatten PDF form fields
