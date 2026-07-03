@@ -18,8 +18,10 @@
   --freely-line-strong: rgba(23, 33, 31, 0.24);
   --freely-teal: #0f948c;
   --freely-teal-dark: #0a605c;
+  --freely-teal-strong: #0d827b;
   --freely-green: #2f7a55;
   --freely-orange: #c75d23;
+  --freely-orange-deep: #a84a17;
   --freely-yellow: #f1b928;
   --freely-red: #b42318;
   --freely-focus: #2563eb;
@@ -39,8 +41,10 @@
   --line-strong: var(--freely-line-strong);
   --teal: var(--freely-teal);
   --teal-dark: var(--freely-teal-dark);
+  --teal-strong: var(--freely-teal-strong);
   --green: var(--freely-green);
   --orange: var(--freely-orange);
+  --orange-deep: var(--freely-orange-deep);
   --yellow: var(--freely-yellow);
   --red: var(--freely-red);
   --coral: var(--freely-orange);
@@ -100,7 +104,7 @@ button {
 }
 
 :focus-visible {
-  outline: 3px solid rgba(37, 99, 235, 0.32);
+  outline: 3px solid var(--freely-focus);
   outline-offset: 3px;
 }
 
@@ -192,7 +196,6 @@ button {
 .nav-links a:focus-visible {
   background: rgba(15, 148, 140, 0.1);
   color: var(--teal-dark);
-  outline: none;
 }
 
 .app-shell {
@@ -240,7 +243,7 @@ button {
 
 .eyebrow {
   margin: 0 0 0.22rem;
-  color: var(--orange);
+  color: var(--orange-deep);
   font-size: 0.73rem;
   font-weight: 900;
   letter-spacing: 0.08em;
@@ -279,12 +282,13 @@ button {
   background: rgba(15, 148, 140, 0.1);
   font-size: 0.8rem;
   font-weight: 900;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .engine-badge.warn {
   border-color: rgba(199, 93, 35, 0.28);
-  color: var(--orange);
+  color: var(--orange-deep);
   background: rgba(199, 93, 35, 0.1);
 }
 
@@ -310,7 +314,6 @@ button {
 .promise-strip a:hover,
 .promise-strip a:focus-visible {
   color: var(--ink);
-  outline: none;
 }
 
 .drop-zone {
@@ -379,9 +382,9 @@ button {
 }
 
 .app-shell .button.primary {
-  border-color: var(--teal);
+  border-color: var(--teal-strong);
   color: #ffffff;
-  background: var(--teal);
+  background: var(--teal-strong);
 }
 
 .app-shell .button.ghost {
@@ -413,6 +416,10 @@ button {
   border-color: rgba(23, 33, 31, 0.14);
   color: var(--muted);
   background: rgba(23, 33, 31, 0.08);
+}
+
+.app-shell a.button.disabled {
+  pointer-events: none;
 }
 
 .app-shell .mini-button {
@@ -475,7 +482,6 @@ body:has(.app-shell) .site-footer a {
 body:has(.app-shell) .site-footer a:hover,
 body:has(.app-shell) .site-footer a:focus-visible {
   color: var(--ink);
-  outline: none;
 }
 
 .suite-footer.site-footer {
@@ -547,7 +553,6 @@ body:has(.app-shell) .site-footer a:focus-visible {
   border-color: rgba(15, 148, 140, 0.3);
   color: var(--teal-dark);
   background: rgba(15, 148, 140, 0.08);
-  outline: none;
 }
 
 .suite-footer.site-footer .suite-footer-meta {
@@ -566,7 +571,6 @@ body:has(.app-shell) .site-footer a:focus-visible {
 .suite-footer.site-footer .suite-footer-meta a:hover,
 .suite-footer.site-footer .suite-footer-meta a:focus-visible {
   color: var(--ink);
-  outline: none;
 }
 
 .discovery-section {
@@ -703,5 +707,17 @@ body:has(.app-shell) .site-footer a:focus-visible {
 
   .suite-footer.site-footer .suite-footer-nav {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell .button,
+  .app-shell .mini-button {
+    transition: none;
+  }
+
+  .app-shell .button:hover:not(:disabled):not(.disabled),
+  .app-shell .mini-button:hover:not(:disabled) {
+    transform: none;
   }
 }

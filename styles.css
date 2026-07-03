@@ -367,6 +367,7 @@ h1, h2, h3, p { margin-top: 0; }
   line-height: 1.15;
   white-space: pre-wrap;
   cursor: move;
+  touch-action: none;
   user-select: none;
 }
 .mark.text,
@@ -448,6 +449,7 @@ h1, h2, h3, p { margin-top: 0; }
   color: var(--red);
   box-shadow: 0 6px 16px rgba(23, 33, 31, 0.18);
   font-size: 0.86rem;
+  touch-action: none;
 }
 .mark.selected .mark-drag,
 .mark:hover .mark-drag,
@@ -475,6 +477,20 @@ h1, h2, h3, p { margin-top: 0; }
 }
 .mark.selected .mark-resize {
   display: block;
+}
+@media (pointer: coarse) {
+  /* Invisible enlarged hit areas (>= 44px) around the small mark handles. */
+  .mark-drag::after,
+  .mark-delete::after,
+  .mark-resize::after {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 2.75rem;
+    height: 2.75rem;
+    transform: translate(-50%, -50%);
+    content: "";
+  }
 }
 
 .panel {

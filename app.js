@@ -32,7 +32,14 @@
     savedInitialsAspect: 0.42,
     dragging: null,
     resizing: null,
-    busy: false
+    busy: false,
+    encrypted: false,
+    renderTask: null,
+    renderGeneration: 0,
+    loadToken: 0,
+    detailsAutoOpened: false,
+    inkReturnFocus: null,
+    imageWidthDefaults: { signature: 34, initials: 12 }
   };
   var textMarkMeasurer = null;
 
@@ -68,8 +75,21 @@
     });
     $("#dropZone").addEventListener("drop", function (event) {
       event.preventDefault();
+      event.stopPropagation();
       $("#dropZone").classList.remove("dragging");
       var file = event.dataTransfer.files && event.dataTransfer.files[0];
+      if (file) {
+        loadPdf(file);
+      }
+    });
+
+    window.addEventListener("dragover", function (event) {
+      event.preventDefault();
+    });
+    window.addEventListener("drop", function (event) {
+      event.preventDefault();
+      $("#dropZone").classList.remove("dragging");
+      var file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
       if (file) {
         loadPdf(file);
       }
@@ -107,6 +127,8 @@
     $("#fillForm").addEventListener("change", handleFormInput);
     $("#markSize").addEventListener("input", handleToolbarInput);
     $("#markSize").addEventListener("change", handleToolbarInput);
+    $("#markDate").addEventListener("input", handleToolbarInput);
+    $("#markDate").addEventListener("change", handleToolbarInput);
     $("#signatureScale").addEventListener("input", handleToolbarInput);
     $("#signatureScale").addEventListener("change", handleToolbarInput);
     $("#markColor").addEventListener("input", handleToolbarInput);
@@ -121,9 +143,13 @@
 
     window.addEventListener("resize", debounce(function () {
       if (state.pdfjsDoc) {
-        renderCurrentPage();
+        renderCurrentPage().catch(reportRenderError);
       }
     }, 150));
+  }
+
+  function reportRenderError(error) {
+    setStatus(getErrorMessage(error), "danger");
   }
 
   async function loadPdf(file) {
@@ -132,35 +158,68 @@
       return;
     }
 
+    state.loadToken += 1;
+    var token = state.loadToken;
     setBusy(true, "Reading PDF");
     resetDocument(false);
 
     try {
       var buffer = await file.arrayBuffer();
+      if (token !== state.loadToken) {
+        return;
+      }
       state.file = file;
       state.bytes = new Uint8Array(buffer);
-      state.pdfDoc = await window.PDFLib.PDFDocument.load(state.bytes, {
+      var pdfDoc = await window.PDFLib.PDFDocument.load(state.bytes, {
         ignoreEncryption: true,
         updateMetadata: false
       });
-      state.pdfjsDoc = await window.pdfjsLib.getDocument({
+      if (token !== state.loadToken) {
+        return;
+      }
+      state.pdfDoc = pdfDoc;
+      state.encrypted = Boolean(pdfDoc.isEncrypted);
+      var pdfjsDoc = await window.pdfjsLib.getDocument({
         data: state.bytes.slice(0),
         disableFontFace: true
       }).promise;
-      state.pageCount = state.pdfDoc.getPageCount();
-      state.pageSizes = state.pdfDoc.getPages().map(function (page) {
-        var size = page.getSize();
-        return { width: size.width, height: size.height };
-      });
-      state.formFields = readFormFields(state.pdfDoc);
+      if (token !== state.loadToken) {
+        pdfjsDoc.destroy();
+        return;
+      }
+      state.pdfjsDoc = pdfjsDoc;
+      state.pageCount = pdfDoc.getPageCount();
+      state.pageSizes = [];
+      for (var pageIndex = 0; pageIndex < pdfjsDoc.numPages; pageIndex += 1) {
+        var sizePage = await pdfjsDoc.getPage(pageIndex + 1);
+        var sizeViewport = sizePage.getViewport({ scale: 1 });
+        state.pageSizes.push({ width: sizeViewport.width, height: sizeViewport.height });
+      }
+      if (token !== state.loadToken) {
+        return;
+      }
+      state.formFields = readFormFields(pdfDoc);
       await collectAnnotationFields();
+      if (token !== state.loadToken) {
+        return;
+      }
       state.currentPage = 0;
       $("#outputName").value = makeOutputName(file.name);
       renderFieldList();
       renderPageRail();
       await renderCurrentPage();
-      setBusy(false, "Ready");
+      if (token !== state.loadToken) {
+        return;
+      }
+      if (state.encrypted) {
+        setBusy(false, "This PDF is password-protected — the filled copy can't be saved. Remove the password first.", "warn");
+      } else {
+        setBusy(false, "Ready");
+      }
     } catch (error) {
+      if (token !== state.loadToken) {
+        return;
+      }
       setBusy(false, getErrorMessage(error), "danger");
       resetDocument(false);
     }
@@ -345,6 +404,18 @@
   }
 
   function getRadioOverlayValue(annotation, field) {
+    var buttonValue = annotation.buttonValue === null || annotation.buttonValue === undefined ? "" : String(annotation.buttonValue);
+    if (buttonValue) {
+      var options = field && field.options ? field.options : [];
+      if (!options.length || options.indexOf(buttonValue) !== -1) {
+        return buttonValue;
+      }
+      if (/^\d+$/.test(buttonValue) && options[Number(buttonValue)] !== undefined) {
+        // PDFs with /Opt arrays name widget on-states by option index.
+        return options[Number(buttonValue)];
+      }
+      return buttonValue;
+    }
     if (field && field.options && field.options.length) {
       var siblings = state.currentAnnotations.filter(function (item) {
         return item.fieldName === annotation.fieldName && getAnnotationFieldType(item) === "radio";
@@ -500,12 +571,25 @@
     $("#emptyState").hidden = true;
     $("#pageStage").hidden = false;
 
-    var page = await state.pdfjsDoc.getPage(state.currentPage + 1);
+    state.renderGeneration += 1;
+    var generation = state.renderGeneration;
+    var pdfjsDoc = state.pdfjsDoc;
+    var page = await pdfjsDoc.getPage(state.currentPage + 1);
+    if (generation !== state.renderGeneration || pdfjsDoc !== state.pdfjsDoc) {
+      return;
+    }
     var base = page.getViewport({ scale: 1 });
     var maxWidth = Math.min(920, Math.max(320, $("#pageStage").clientWidth - 24));
     var scale = Math.min(1.7, maxWidth / Math.max(1, base.width));
     var viewport = page.getViewport({ scale: scale });
     state.currentViewport = viewport;
+    if (state.renderTask) {
+      try {
+        state.renderTask.cancel();
+      } catch (error) {
+        // A task that already settled cannot be cancelled.
+      }
+    }
     var canvas = $("#pageCanvas");
     var context = canvas.getContext("2d");
     canvas.width = Math.ceil(viewport.width);
@@ -516,12 +600,33 @@
     $("#pageCanvasWrap").style.height = canvas.style.height;
     $("#overlayLayer").style.width = canvas.style.width;
     $("#overlayLayer").style.height = canvas.style.height;
-    await page.render({ canvasContext: context, viewport: viewport }).promise;
+    var renderTask = page.render({ canvasContext: context, viewport: viewport });
+    state.renderTask = renderTask;
+    try {
+      await renderTask.promise;
+    } catch (error) {
+      if (state.renderTask === renderTask) {
+        state.renderTask = null;
+      }
+      if (error && error.name === "RenderingCancelledException") {
+        return;
+      }
+      throw error;
+    }
+    if (state.renderTask === renderTask) {
+      state.renderTask = null;
+    }
+    if (generation !== state.renderGeneration || pdfjsDoc !== state.pdfjsDoc) {
+      return;
+    }
     try {
       state.currentAnnotations = (await page.getAnnotations({ intent: "display" })).filter(isFillableAnnotation);
       state.currentAnnotations.forEach(ensureAnnotationField);
     } catch (error) {
       state.currentAnnotations = [];
+    }
+    if (generation !== state.renderGeneration || pdfjsDoc !== state.pdfjsDoc) {
+      return;
     }
     renderOverlay(viewport);
     updatePageActiveState();
@@ -599,13 +704,13 @@
       "top:" + (mark.y * 100) + "%",
       "width:" + (mark.width * 100) + "%",
       "height:" + (mark.height * 100) + "%",
-      "font-size:" + mark.size + "px",
+      "font-size:" + getMarkPreviewFontSize(mark) + "px",
       "color:" + escapeAttr(mark.color)
     ].join(";");
     var selected = mark.id === state.selectedMarkId ? " selected" : "";
     var dragButton = '<button class="mark-drag" type="button" data-drag-mark="' + escapeAttr(mark.id) + '" aria-label="Move mark"></button>';
     var deleteButton = '<button class="mark-delete" type="button" data-delete-mark="' + escapeAttr(mark.id) + '" aria-label="Delete mark">x</button>';
-    var resizeHandle = '<span class="mark-resize" data-resize-mark="' + escapeAttr(mark.id) + '" aria-label="Resize mark" role="button" tabindex="-1"></span>';
+    var resizeHandle = '<span class="mark-resize" data-resize-mark="' + escapeAttr(mark.id) + '" aria-hidden="true"></span>';
     var content = "";
 
     if (isImageMark(mark)) {
@@ -675,7 +780,7 @@
       mark.width = 0.1;
       mark.autoSize = true;
     } else if (tool === "date") {
-      mark.text = $("#markDate").value || new Date().toISOString().slice(0, 10);
+      mark.text = $("#markDate").value || getLocalDateValue();
       mark.width = 0.22;
       mark.autoSize = true;
     } else if (tool === "initials") {
@@ -684,23 +789,48 @@
         return null;
       }
       mark.dataUrl = state.savedInitialsDataUrl;
-      mark.width = clampNumber($("#signatureScale").value, 8, 95, 34) / 260;
-      mark.height = mark.width * state.savedInitialsAspect;
+      mark.width = clampNumber($("#signatureScale").value, 8, 95, state.imageWidthDefaults.initials) / 100;
+      mark.height = imageHeightFraction(mark.width, state.savedInitialsAspect, mark.pageIndex);
     } else if (tool === "check") {
-      mark.width = 0.045;
-      mark.height = 0.045;
       mark.size = Math.max(18, size);
+      applyCheckBoxFromSize(mark);
     } else if (tool === "signature") {
       if (!state.savedSignatureDataUrl) {
         openInkDialog("signature");
         return null;
       }
       mark.dataUrl = state.savedSignatureDataUrl;
-      mark.width = clampNumber($("#signatureScale").value, 8, 95, 34) / 100;
-      mark.height = mark.width * state.savedSignatureAspect;
+      mark.width = clampNumber($("#signatureScale").value, 8, 95, state.imageWidthDefaults.signature) / 100;
+      mark.height = imageHeightFraction(mark.width, state.savedSignatureAspect, mark.pageIndex);
     }
     autoSizeTextMark(mark);
     return mark;
+  }
+
+  function getPageDisplaySize(pageIndex) {
+    return state.pageSizes[pageIndex] || { width: 612, height: 792 };
+  }
+
+  function imageHeightFraction(widthFraction, aspect, pageIndex) {
+    var pageSize = getPageDisplaySize(pageIndex);
+    return widthFraction * aspect * (pageSize.width / Math.max(1, pageSize.height));
+  }
+
+  function applyCheckBoxFromSize(mark) {
+    var pageSize = getPageDisplaySize(mark.pageIndex);
+    var checkSize = Math.max(14, mark.size * 1.12);
+    mark.width = Math.min(Math.max(0.01, 1 - mark.x), checkSize / Math.max(1, pageSize.width));
+    mark.height = Math.min(Math.max(0.01, 1 - mark.y), checkSize / Math.max(1, pageSize.height));
+  }
+
+  function getMarkPreviewFontSize(mark) {
+    var scale = state.currentViewport ? state.currentViewport.scale : 1;
+    if (mark.type === "check" && state.currentViewport) {
+      var boxWidth = mark.width * state.currentViewport.width;
+      var boxHeight = mark.height * state.currentViewport.height;
+      return Math.max(8, Math.min(boxWidth, boxHeight) * 0.9);
+    }
+    return Math.max(1, mark.size * scale);
   }
 
   function handleMarkPointerDown(event) {
@@ -837,7 +967,8 @@
     mark.width = widthPx / layerWidth;
     mark.height = heightPx / layerHeight;
     if (mark.type === "check") {
-      mark.size = Math.max(12, Math.min(widthPx, heightPx) * 0.9);
+      var viewScale = state.currentViewport ? Math.max(0.01, state.currentViewport.scale) : 1;
+      mark.size = Math.max(12, (Math.min(widthPx, heightPx) / viewScale) * 0.9);
     }
     updateMarkElementLayout(mark);
     syncToolbarValues();
@@ -862,12 +993,12 @@
       renderOverlayFromCurrent();
     } else if (event.target.id === "selectedSize" && selected) {
       applySizeToMark(selected, clampNumber(event.target.value, 8, 96, selected.size));
-      $("#selectedSizeValue").textContent = selected.size + " pt";
+      $("#selectedSizeValue").textContent = Math.round(selected.size) + " pt";
       renderOverlayFromCurrent();
     } else if (event.target.id === "selectedPage" && selected) {
       selected.pageIndex = Number(event.target.value);
       state.currentPage = selected.pageIndex;
-      renderCurrentPage();
+      renderCurrentPage().catch(reportRenderError);
     }
     syncControls();
   }
@@ -875,6 +1006,14 @@
   function handleToolbarInput(event) {
     syncToolbarValueLabels();
     var selected = getSelectedMark();
+    if (event.target.id === "signatureScale") {
+      var percent = Math.round(clampNumber(event.target.value, 8, 95, 34));
+      if (selected && isImageMark(selected)) {
+        state.imageWidthDefaults[selected.type === "initials" ? "initials" : "signature"] = percent;
+      } else if (state.activeTool === "signature" || state.activeTool === "initials") {
+        state.imageWidthDefaults[state.activeTool] = percent;
+      }
+    }
     if (!selected) {
       return;
     }
@@ -889,6 +1028,11 @@
       selected.color = event.target.value;
       updateMarkElementLayout(selected);
       renderSelectedControls();
+    } else if (event.target.id === "markDate" && selected.type === "date" && event.target.value) {
+      selected.text = event.target.value;
+      autoSizeTextMark(selected);
+      renderOverlayFromCurrent();
+      renderSelectedControls();
     }
     syncToolbarValues();
   }
@@ -898,10 +1042,8 @@
     if (isTextMark(mark)) {
       mark.autoSize = true;
       autoSizeTextMark(mark);
-    } else if (mark.type === "check" && state.currentViewport) {
-      var checkSize = Math.max(14, mark.size * 1.12);
-      mark.width = Math.min(1 - mark.x, checkSize / Math.max(1, state.currentViewport.width));
-      mark.height = Math.min(1 - mark.y, checkSize / Math.max(1, state.currentViewport.height));
+    } else if (mark.type === "check") {
+      applyCheckBoxFromSize(mark);
     }
     updateMarkElementLayout(mark);
   }
@@ -930,13 +1072,17 @@
       return;
     }
 
+    if (!state.detailsAutoOpened && $("#fillForm").hidden) {
+      state.detailsAutoOpened = true;
+      toggleDetails();
+    }
     $("#selectedText").disabled = isImageMark(mark) || mark.type === "check";
     $("#selectedText").value = mark.type === "check" ? "✓" : mark.text || "";
     $("#selectedColor").value = mark.color || "#111827";
     $("#selectedColor").disabled = isImageMark(mark);
     $("#selectedSize").disabled = isImageMark(mark);
-    $("#selectedSize").value = mark.size;
-    $("#selectedSizeValue").textContent = mark.size + " pt";
+    $("#selectedSize").value = Math.round(mark.size);
+    $("#selectedSizeValue").textContent = Math.round(mark.size) + " pt";
     $("#selectedPage").innerHTML = Array.from({ length: state.pageCount }, function (_, index) {
       return '<option value="' + index + '"' + (index === mark.pageIndex ? " selected" : "") + ">Page " + (index + 1) + "</option>";
     }).join("");
@@ -996,7 +1142,7 @@
     if (!mark) {
       return;
     }
-    mark.text = editable.textContent || "";
+    mark.text = readEditableText(editable);
     editable.dataset.empty = String(!mark.text);
     autoSizeTextMark(mark);
     updateMarkElementLayout(mark);
@@ -1004,6 +1150,12 @@
       renderSelectedControls();
     }
     updateStats();
+  }
+
+  function readEditableText(element) {
+    // innerText preserves <br> and block boundaries as newlines; textContent flattens them.
+    var text = String(element.innerText || "").replace(/\r\n?/g, "\n");
+    return text.replace(/\n$/, "");
   }
 
   function deselectSelectedMark() {
@@ -1024,6 +1176,10 @@
       closeInkDialog();
       return;
     }
+    if (event.key === "Tab" && !$("#inkDialog").hidden) {
+      trapInkDialogFocus(event);
+      return;
+    }
 
     if ((event.key !== "Backspace" && event.key !== "Delete") || !state.selectedMarkId) {
       return;
@@ -1034,6 +1190,29 @@
     }
     event.preventDefault();
     deleteSelectedMark();
+  }
+
+  function trapInkDialogFocus(event) {
+    var dialog = $("#inkDialog");
+    var focusable = $$("#inkDialog canvas, #inkDialog input, #inkDialog button").filter(function (element) {
+      return !element.disabled;
+    });
+    if (!focusable.length) {
+      event.preventDefault();
+      return;
+    }
+    var first = focusable[0];
+    var last = focusable[focusable.length - 1];
+    var active = document.activeElement;
+    if (event.shiftKey) {
+      if (active === first || !dialog.contains(active)) {
+        event.preventDefault();
+        last.focus();
+      }
+    } else if (active === last || !dialog.contains(active)) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   function updateSelectedMarkClass() {
@@ -1060,7 +1239,7 @@
     element.style.top = (mark.y * 100) + "%";
     element.style.width = (mark.width * 100) + "%";
     element.style.height = (mark.height * 100) + "%";
-    element.style.fontSize = mark.size + "px";
+    element.style.fontSize = getMarkPreviewFontSize(mark) + "px";
     element.style.color = mark.color || "#111827";
   }
 
@@ -1096,7 +1275,7 @@
     var content = measurer.querySelector(".mark-content");
     measurer.className = "mark " + mark.type;
     measurer.style.maxWidth = maxWidth + "px";
-    measurer.style.fontSize = mark.size + "px";
+    measurer.style.fontSize = getMarkPreviewFontSize(mark) + "px";
     measurer.style.color = mark.color || "#111827";
     content.textContent = mark.text || "";
     content.dataset.empty = String(!mark.text);
@@ -1199,6 +1378,13 @@
       button.classList.toggle("active", active);
       button.setAttribute("aria-pressed", String(active));
     });
+    if (state.activeTool === "signature" || state.activeTool === "initials") {
+      var selected = getSelectedMark();
+      if (!selected || !isImageMark(selected)) {
+        $("#signatureScale").value = String(state.imageWidthDefaults[state.activeTool]);
+        syncToolbarValueLabels();
+      }
+    }
     updateToolMode();
     syncSignatureControls();
     return true;
@@ -1252,7 +1438,7 @@
       return;
     }
     state.currentPage = Math.min(state.pageCount - 1, Math.max(0, pageIndex));
-    renderCurrentPage();
+    renderCurrentPage().catch(reportRenderError);
     syncControls();
   }
 
@@ -1261,16 +1447,48 @@
       setStatus("Choose a PDF first", "warn");
       return;
     }
+    if (state.encrypted) {
+      setStatus("This PDF is password-protected — the filled copy can't be saved. Remove the password first.", "warn");
+      return;
+    }
 
     setBusy(true, "Building filled PDF");
     try {
       var flattening = $("#flattenFields").checked;
-      var bytes = await buildFilledPdf();
-      downloadBlob(new Blob([bytes], { type: "application/pdf" }), getOutputName());
-      setBusy(false, formatBytes(bytes.length) + (flattening ? " flattened PDF ready" : " PDF ready; fields editable"));
+      var result = await buildFilledPdf();
+      downloadBlob(new Blob([result.bytes], { type: "application/pdf" }), getOutputName());
+      var summary = formatBytes(result.bytes.length) + (flattening ? " flattened PDF ready" : " PDF ready; fields editable");
+      var warningText = describeExportWarnings(result.warnings);
+      if (warningText) {
+        setBusy(false, summary + "; " + warningText, "warn");
+      } else {
+        setBusy(false, summary);
+      }
     } catch (error) {
       setBusy(false, getErrorMessage(error), "danger");
     }
+  }
+
+  function describeExportWarnings(warnings) {
+    var parts = [];
+    var chars = Object.keys(warnings.characters || {});
+    if (chars.length) {
+      var samples = chars.slice(0, 6).map(function (char) {
+        var replacement = warnings.characters[char];
+        return replacement ? '"' + char + '" → "' + replacement + '"' : '"' + char + '" removed';
+      });
+      parts.push("replaced unsupported characters: " + samples.join(", ") + (chars.length > 6 ? ", …" : ""));
+    }
+    if (warnings.fields && warnings.fields.length) {
+      parts.push("could not fill fields: " + warnings.fields.slice(0, 4).join(", ") + (warnings.fields.length > 4 ? ", …" : ""));
+    }
+    if (warnings.flatten) {
+      parts.push("form fields could not be flattened");
+    }
+    if (warnings.appearances) {
+      parts.push("some field appearances were not updated");
+    }
+    return parts.join("; ");
   }
 
   async function buildFilledPdf() {
@@ -1279,18 +1497,21 @@
       ignoreEncryption: true,
       updateMetadata: false
     });
-    applyFormValues(doc);
+    var warnings = { characters: {}, fields: [], flatten: false, appearances: false };
+    var regular = await doc.embedFont(PDFLib.StandardFonts.Helvetica);
+    var bold = await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+
+    applyFormValues(doc, regular, warnings);
 
     if ($("#flattenFields").checked) {
       try {
         doc.getForm().flatten();
       } catch (error) {
         // PDFs without AcroForm fields do not need flattening.
+        warnings.flatten = hasAnyFormField(doc);
       }
     }
 
-    var regular = await doc.embedFont(PDFLib.StandardFonts.Helvetica);
-    var bold = await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
     var signatureImages = {};
 
     for (var index = 0; index < state.marks.length; index += 1) {
@@ -1300,27 +1521,47 @@
         continue;
       }
       if (isImageMark(mark)) {
-        if (!signatureImages[mark.id]) {
-          signatureImages[mark.id] = await doc.embedPng(dataUrlToBytes(mark.dataUrl));
+        if (!signatureImages[mark.dataUrl]) {
+          signatureImages[mark.dataUrl] = await doc.embedPng(dataUrlToBytes(mark.dataUrl));
         }
-        drawSignatureMark(page, mark, signatureImages[mark.id]);
+        drawSignatureMark(page, mark, signatureImages[mark.dataUrl]);
       } else if (mark.type === "check") {
         drawCheckMark(page, mark);
       } else {
-        drawTextMark(page, mark, mark.type === "initials" ? bold : regular);
+        drawTextMark(page, mark, mark.type === "initials" ? bold : regular, warnings);
       }
     }
 
     doc.setCreator("Fill Freely");
     doc.setProducer("Fill Freely");
     doc.setModificationDate(new Date());
-    return await doc.save({
-      useObjectStreams: true,
-      updateFieldAppearances: true
-    });
+    var bytes;
+    try {
+      bytes = await doc.save({
+        useObjectStreams: true,
+        updateFieldAppearances: true
+      });
+    } catch (error) {
+      // Appearance regeneration can fail on fields whose values need glyphs the
+      // default form font cannot encode; keep the original appearances instead.
+      bytes = await doc.save({
+        useObjectStreams: true,
+        updateFieldAppearances: false
+      });
+      warnings.appearances = true;
+    }
+    return { bytes: bytes, warnings: warnings };
   }
 
-  function applyFormValues(doc) {
+  function hasAnyFormField(doc) {
+    try {
+      return doc.getForm().getFields().length > 0;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function applyFormValues(doc, font, warnings) {
     var form;
     try {
       form = doc.getForm();
@@ -1331,7 +1572,7 @@
     state.formFields.forEach(function (field) {
       try {
         if (field.type === "text") {
-          form.getTextField(field.name).setText(field.value || "");
+          form.getTextField(field.name).setText(sanitizeTextForFont(field.value || "", font, warnings));
         } else if (field.type === "checkbox") {
           var checkbox = form.getCheckBox(field.name);
           if (field.checked) {
@@ -1347,87 +1588,216 @@
           form.getOptionList(field.name).select(field.value || "");
         }
       } catch (error) {
-        // Leave unsupported or malformed fields unchanged.
+        // Leave unsupported or malformed fields unchanged, but tell the user.
+        if (warnings && warnings.fields.indexOf(field.name) === -1) {
+          warnings.fields.push(field.name);
+        }
       }
     });
   }
 
-  function drawTextMark(page, mark, font) {
-    var size = page.getSize();
+  var EXPORT_CHAR_REPLACEMENTS = {
+    "\u2018": "'", "\u2019": "'", "\u201A": "'", "\u201B": "'", "\u2032": "'",
+    "\u201C": '"', "\u201D": '"', "\u201E": '"', "\u201F": '"', "\u2033": '"',
+    "\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2013": "-", "\u2014": "-", "\u2015": "-", "\u2212": "-",
+    "\u2026": "...",
+    "\t": " ", "\u00A0": " ", "\u2007": " ", "\u202F": " ", "\u3000": " ",
+    "\u200B": "", "\u200C": "", "\u200D": "", "\uFEFF": "",
+    "\u2028": "\n", "\u2029": "\n"
+  };
+  // Whitespace and zero-width normalizations that are not worth a warning.
+  var SILENT_CHAR_REPLACEMENTS = {
+    "\t": true, "\u00A0": true, "\u2007": true, "\u202F": true, "\u3000": true,
+    "\u200B": true, "\u200C": true, "\u200D": true, "\uFEFF": true,
+    "\u2028": true, "\u2029": true
+  };
+  var fontCharSetCache = typeof WeakMap === "function" ? new WeakMap() : null;
+
+  function getFontCharSet(font) {
+    if (fontCharSetCache && fontCharSetCache.has(font)) {
+      return fontCharSetCache.get(font);
+    }
+    var set = null;
+    try {
+      if (typeof font.getCharacterSet === "function") {
+        set = new Set(font.getCharacterSet());
+      }
+    } catch (error) {
+      set = null;
+    }
+    if (fontCharSetCache) {
+      fontCharSetCache.set(font, set);
+    }
+    return set;
+  }
+
+  function canEncodeChar(font, char) {
+    var supported = getFontCharSet(font);
+    if (supported) {
+      return supported.has(char.codePointAt(0));
+    }
+    try {
+      font.widthOfTextAtSize(char, 10);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function sanitizeTextForFont(text, font, warnings) {
+    var source = String(text || "").replace(/\r\n?/g, "\n");
+    var result = "";
+    for (var index = 0; index < source.length; index += 1) {
+      var char = source[index];
+      var code = source.codePointAt(index);
+      if (code > 0xffff) {
+        char = source.slice(index, index + 2);
+        index += 1;
+      }
+      if (char === "\n") {
+        result += char;
+        continue;
+      }
+      if (Object.prototype.hasOwnProperty.call(EXPORT_CHAR_REPLACEMENTS, char)) {
+        result += EXPORT_CHAR_REPLACEMENTS[char];
+        recordCharChange(warnings, char, EXPORT_CHAR_REPLACEMENTS[char]);
+        continue;
+      }
+      if (canEncodeChar(font, char)) {
+        result += char;
+      } else {
+        recordCharChange(warnings, char, "");
+      }
+    }
+    return result;
+  }
+
+  function recordCharChange(warnings, from, to) {
+    if (warnings && warnings.characters && from !== to && !SILENT_CHAR_REPLACEMENTS[from]) {
+      warnings.characters[from] = to;
+    }
+  }
+
+  // Marks are stored as fractions of the page as PDF.js displays it: the
+  // CropBox with /Rotate applied. Export must map those display-space points
+  // back into unrotated PDF user space (and add the CropBox origin).
+  function getPageGeometry(page) {
+    var crop = page.getCropBox();
+    var angle = page.getRotation ? page.getRotation().angle : 0;
+    var rotation = ((Math.round(angle / 90) * 90) % 360 + 360) % 360;
+    var swapped = rotation === 90 || rotation === 270;
+    return {
+      crop: crop,
+      rotation: rotation,
+      width: swapped ? crop.height : crop.width,
+      height: swapped ? crop.width : crop.height
+    };
+  }
+
+  // (dx, dy) is a display-space point: dx from the left edge, dy from the TOP
+  // edge of the page as previewed. Returns unrotated PDF user-space coords.
+  function displayPointToPdf(geometry, dx, dy) {
+    var crop = geometry.crop;
+    if (geometry.rotation === 90) {
+      return { x: crop.x + dy, y: crop.y + dx };
+    }
+    if (geometry.rotation === 180) {
+      return { x: crop.x + crop.width - dx, y: crop.y + dy };
+    }
+    if (geometry.rotation === 270) {
+      return { x: crop.x + crop.width - dy, y: crop.y + crop.height - dx };
+    }
+    return { x: crop.x + dx, y: crop.y + crop.height - dy };
+  }
+
+  function drawTextMark(page, mark, font, warnings) {
+    var geometry = getPageGeometry(page);
     var fontSize = mark.size;
-    var x = mark.x * size.width;
-    var y = size.height - mark.y * size.height - fontSize;
-    var maxWidth = getTextMarkPdfWidth(mark, font, fontSize, size.width);
-    var lines = wrapText(mark.text || "", font, fontSize, maxWidth);
+    var text = sanitizeTextForFont(mark.text || "", font, warnings);
+    var maxWidth = Math.max(fontSize, mark.width * geometry.width + fontSize * 0.35);
+    var lines = wrapText(text, font, fontSize, maxWidth);
+    var color = hexToRgb(mark.color);
+    var rotate = window.PDFLib.degrees(geometry.rotation);
     lines.forEach(function (line, index) {
+      var dx = mark.x * geometry.width;
+      var dy = mark.y * geometry.height + fontSize + index * fontSize * 1.15;
+      var point = displayPointToPdf(geometry, dx, dy);
       page.drawText(line, {
-        x: x,
-        y: y - index * fontSize * 1.22,
+        x: point.x,
+        y: point.y,
         size: fontSize,
         font: font,
-        color: hexToRgb(mark.color)
+        color: color,
+        rotate: rotate
       });
     });
   }
 
-  function getTextMarkPdfWidth(mark, font, fontSize, pageWidth) {
-    var remainingWidth = Math.max(12, pageWidth - mark.x * pageWidth - 2);
-    var text = mark.text || "";
-    var widestLine = text.split(/\r?\n/).reduce(function (widest, line) {
-      return Math.max(widest, font.widthOfTextAtSize(line || "", fontSize));
-    }, 0);
-    return Math.min(remainingWidth, Math.max(12, widestLine + fontSize * 0.5));
-  }
-
   function drawCheckMark(page, mark) {
-    var size = page.getSize();
-    var x = mark.x * size.width;
-    var y = size.height - mark.y * size.height - mark.height * size.height;
-    var width = Math.max(10, mark.width * size.width);
-    var height = Math.max(10, mark.height * size.height);
+    var geometry = getPageGeometry(page);
+    var width = Math.max(10, mark.width * geometry.width);
+    var height = Math.max(10, mark.height * geometry.height);
+    var left = mark.x * geometry.width;
+    var top = mark.y * geometry.height;
     var color = hexToRgb(mark.color);
+    var thickness = Math.max(2, width * 0.12);
+    // fx measures from the box's left edge, fy from its bottom edge, both in
+    // display orientation; endpoints are mapped so no rotate option is needed.
+    var point = function (fx, fy) {
+      return displayPointToPdf(geometry, left + fx * width, top + (1 - fy) * height);
+    };
     page.drawLine({
-      start: { x: x + width * 0.08, y: y + height * 0.45 },
-      end: { x: x + width * 0.38, y: y + height * 0.12 },
-      thickness: Math.max(2, width * 0.12),
+      start: point(0.08, 0.45),
+      end: point(0.38, 0.12),
+      thickness: thickness,
       color: color
     });
     page.drawLine({
-      start: { x: x + width * 0.38, y: y + height * 0.12 },
-      end: { x: x + width * 0.94, y: y + height * 0.9 },
-      thickness: Math.max(2, width * 0.12),
+      start: point(0.38, 0.12),
+      end: point(0.94, 0.9),
+      thickness: thickness,
       color: color
     });
   }
 
   function drawSignatureMark(page, mark, image) {
-    var size = page.getSize();
-    var width = mark.width * size.width;
-    var height = mark.height * size.height;
+    var geometry = getPageGeometry(page);
+    var width = mark.width * geometry.width;
+    var height = mark.height * geometry.height;
+    // Anchor at the display-space bottom-left corner of the image box; with
+    // the matching rotate option the image spans the previewed rectangle.
+    var anchor = displayPointToPdf(geometry, mark.x * geometry.width, mark.y * geometry.height + height);
     page.drawImage(image, {
-      x: mark.x * size.width,
-      y: size.height - mark.y * size.height - height,
+      x: anchor.x,
+      y: anchor.y,
       width: width,
-      height: height
+      height: height,
+      rotate: window.PDFLib.degrees(geometry.rotation)
     });
   }
 
   function wrapText(text, font, fontSize, maxWidth) {
-    var words = String(text || "").split(/\s+/);
     var lines = [];
-    var line = "";
-    words.forEach(function (word) {
-      var candidate = line ? line + " " + word : word;
-      if (font.widthOfTextAtSize(candidate, fontSize) > maxWidth && line) {
+    String(text || "").replace(/\r\n?/g, "\n").split("\n").forEach(function (rawLine) {
+      var words = rawLine.split(/\s+/).filter(Boolean);
+      if (!words.length) {
+        lines.push("");
+        return;
+      }
+      var line = "";
+      words.forEach(function (word) {
+        var candidate = line ? line + " " + word : word;
+        if (font.widthOfTextAtSize(candidate, fontSize) > maxWidth && line) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = candidate;
+        }
+      });
+      if (line) {
         lines.push(line);
-        line = word;
-      } else {
-        line = candidate;
       }
     });
-    if (line) {
-      lines.push(line);
-    }
     return lines.length ? lines : [""];
   }
 
@@ -1436,10 +1806,7 @@
     var context = canvas.getContext("2d");
     var drawing = false;
     var lastPoint = null;
-    context.lineCap = "round";
-    context.lineJoin = "round";
-    context.lineWidth = 5;
-    context.strokeStyle = "#111827";
+    applyInkPadStrokeStyle(context);
 
     canvas.addEventListener("pointerdown", function (event) {
       drawing = true;
@@ -1487,7 +1854,7 @@
 
   function openInkDialog(tool) {
     state.inkTool = tool;
-    clearInkPad();
+    state.inkReturnFocus = document.activeElement;
     $("#typedInkText").placeholder = tool === "initials" ? "Type initials" : "Type a signature";
     $("#inkTitle").textContent = tool === "initials" ? "Create initials" : "Create signature";
     $("#inkNote").textContent = tool === "initials"
@@ -1495,6 +1862,8 @@
       : "Draw your signature or type your name to generate a reusable visual signature. This is not a cryptographic digital signature.";
     $("#useSignature").textContent = tool === "initials" ? "Save initials and place" : "Save signature and place";
     $("#inkDialog").hidden = false;
+    sizeInkPad();
+    clearInkPad();
     window.requestAnimationFrame(function () {
       $("#signaturePad").focus();
     });
@@ -1504,6 +1873,34 @@
     $("#inkDialog").hidden = true;
     state.inkTool = "";
     clearInkPad();
+    var returnFocus = state.inkReturnFocus;
+    state.inkReturnFocus = null;
+    if (returnFocus && typeof returnFocus.focus === "function" && document.contains(returnFocus)) {
+      returnFocus.focus();
+    }
+  }
+
+  // Match the canvas backing store to its CSS size so drawn strokes are not
+  // stretched, and render crisply on high-DPI screens.
+  function sizeInkPad() {
+    var canvas = $("#signaturePad");
+    var rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      return;
+    }
+    var ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(rect.width * ratio));
+    canvas.height = Math.max(1, Math.round(rect.height * ratio));
+    var context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    applyInkPadStrokeStyle(context);
+  }
+
+  function applyInkPadStrokeStyle(context) {
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.lineWidth = 5;
+    context.strokeStyle = "#111827";
   }
 
   function clearInkPad() {
@@ -1608,7 +2005,7 @@
     syncToolbarValues();
 
     var hasPdf = Boolean(state.bytes) && !state.busy;
-    $("#downloadPdf").disabled = !hasPdf;
+    $("#downloadPdf").disabled = !hasPdf || state.encrypted;
     $("#prevPage").disabled = !hasPdf || state.currentPage <= 0;
     $("#nextPage").disabled = !hasPdf || state.currentPage >= state.pageCount - 1;
     syncSignatureControls();
@@ -1664,6 +2061,7 @@
     $("#markColor").value = "#111827";
     $("#markSize").value = "16";
     $("#signatureScale").value = "34";
+    state.imageWidthDefaults = { signature: 34, initials: 12 };
     setDefaultDate();
     setTool("");
     setStatus("Ready");
@@ -1671,9 +2069,19 @@
   }
 
   function resetDocument(clearFileInput) {
+    if (state.renderTask) {
+      try {
+        state.renderTask.cancel();
+      } catch (error) {
+        // A task that already settled cannot be cancelled.
+      }
+      state.renderTask = null;
+    }
+    state.renderGeneration += 1;
     if (state.pdfjsDoc && state.pdfjsDoc.destroy) {
       state.pdfjsDoc.destroy();
     }
+    state.encrypted = false;
     state.file = null;
     state.bytes = null;
     state.pdfDoc = null;
@@ -1703,7 +2111,14 @@
   }
 
   function setDefaultDate() {
-    $("#markDate").value = new Date().toISOString().slice(0, 10);
+    $("#markDate").value = getLocalDateValue();
+  }
+
+  function getLocalDateValue() {
+    var now = new Date();
+    return now.getFullYear() + "-" +
+      String(now.getMonth() + 1).padStart(2, "0") + "-" +
+      String(now.getDate()).padStart(2, "0");
   }
 
   function setBusy(isBusy, text, level) {
@@ -1730,10 +2145,12 @@
   }
 
   function getCanvasPoint(canvas, event) {
+    // The ink pad context is scaled by devicePixelRatio, so drawing happens in
+    // CSS pixel coordinates.
     var rect = canvas.getBoundingClientRect();
     return {
-      x: (event.clientX - rect.left) * (canvas.width / Math.max(1, rect.width)),
-      y: (event.clientY - rect.top) * (canvas.height / Math.max(1, rect.height))
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
     };
   }
 

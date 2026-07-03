@@ -1,7 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Fill Freely">
-  <rect width="64" height="64" rx="14" fill="#17211f"/>
-  <path d="M17 10h24l9 9v35H17z" fill="#fffdfa"/>
-  <path d="M41 10v10h9z" fill="#c75d23"/>
-  <path d="M23 29h18v5H23zM23 39h12v5H23z" fill="#0f948c"/>
-  <path d="M37 42c4-5 7-7 10-5 2 2-1 8-10 10-7 2-12 1-17-2" fill="none" stroke="#f1b928" stroke-width="4" stroke-linecap="round"/>
+  <rect width="64" height="64" rx="14" fill="#101615"/>
+    <path d="M40.2 12.2a5.6 5.6 0 0 1 7.9 0l3.7 3.7a5.6 5.6 0 0 1 0 7.9L28 47.6l-13.8 4.2 4.2-13.8z" fill="#14b8ae"/>
+    <rect x="14" y="50" width="24" height="4" rx="2" fill="#14b8ae" opacity="0.55"/>
 </svg>
